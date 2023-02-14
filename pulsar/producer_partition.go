@@ -1088,6 +1088,7 @@ func (p *partitionProducer) internalSendAsync(ctx context.Context, msg *Producer
 	}
 	p.options.Interceptors.BeforeSend(p, msg)
 
+	// TODO maybe block.
 	p.eventsChan <- sr
 
 	if !p.options.DisableBlockIfQueueFull {
