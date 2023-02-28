@@ -24,6 +24,7 @@
 [![LICENSE](https://img.shields.io/hexpm/l/pulsar.svg)](https://github.com/apache/pulsar-client-go/blob/master/LICENSE)
 # Apache Pulsar Go Client Library
 
+
 A Go client library for [Apache Pulsar](https://pulsar.apache.org/).
 
 ## Purpose
