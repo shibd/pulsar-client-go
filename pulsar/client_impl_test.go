@@ -425,7 +425,7 @@ func TestNamespaceTopics(t *testing.T) {
 		t.Fatal(err)
 	}
 	topic2 := fmt.Sprintf("%s/topic-2", namespace)
-	if err := httpPut("admin/v2/persistent/"+topic2, namespace); err != nil {
+	if err := httpPut("admin/v2/persistent/"+topic2, nil); err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
@@ -488,7 +488,7 @@ func TestNamespaceTopicsWebURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	topic2 := fmt.Sprintf("%s/topic-2", namespace)
-	if err := httpPut("admin/v2/persistent/"+topic2, namespace); err != nil {
+	if err := httpPut("admin/v2/persistent/"+topic2, nil); err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
