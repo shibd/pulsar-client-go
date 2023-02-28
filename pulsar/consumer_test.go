@@ -294,7 +294,7 @@ func TestConsumerKeyShared(t *testing.T) {
 	ctx := context.Background()
 	for i := 0; i < 100; i++ {
 		_, err := producer.Send(ctx, &ProducerMessage{
-			Key:     fmt.Sprintf("key-shared-%d", i%3),
+			Key:     fmt.Sprintf("key-shared-%d", i%10),
 			Payload: []byte(fmt.Sprintf("value-%d", i)),
 		})
 		assert.Nil(t, err)
