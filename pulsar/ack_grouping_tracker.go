@@ -83,45 +83,45 @@ func newAckGroupingTracker(options *AckGroupingOptions,
 		timeout.Stop()
 	}
 	t := &timedAckGroupingTracker{
-		ackIndividualCh:   make(chan MessageID),
-		ackCumulativeCh:   make(chan MessageID),
-		duplicateIDCh:     make(chan MessageID),
-		duplicateResultCh: make(chan bool),
-		flushCh:           make(chan ackFlushType),
-		waitFlushCh:       make(chan bool),
+		eventsCh: make(chan interface{}),
 	}
+
 	go func() {
 		for {
 			select {
-			case id := <-t.ackIndividualCh:
-				if c.addAndCheckIfFull(id) {
-					c.flushIndividualAcks()
-					if options.MaxTime > 0 {
-						timeout.Reset(options.MaxTime)
+			case req := <-t.eventsCh:
+				switch v := req.(type) {
+				case *addCumulativeReq:
+					c.tryUpdateLastCumulativeAck(v.id)
+					if options.MaxTime <= 0 {
+						c.flushCumulativeAck()
+					}
+				case *addIndividualReq:
+					if c.addAndCheckIfFull(v.id) {
+						c.flushIndividualAcks()
+						if options.MaxTime > 0 {
+							timeout.Reset(options.MaxTime)
+						}
+					}
+				case *isDuplicateIDReq:
+					v.doneCh <- c.isDuplicate(v.id)
+				case *flushReq:
+					timeout.Stop()
+					c.flush()
+					if v.ackFlushType == flushAndClean {
+						c.clean()
+					}
+					v.doneCh <- true
+					if v.ackFlushType == flushAndClose {
+						return
 					}
 				}
-			case id := <-t.ackCumulativeCh:
-				c.tryUpdateLastCumulativeAck(id)
-				if options.MaxTime <= 0 {
-					c.flushCumulativeAck()
-				}
-			case id := <-t.duplicateIDCh:
-				t.duplicateResultCh <- c.isDuplicate(id)
 			case <-timeout.C:
 				c.flush()
-			case ackFlushType := <-t.flushCh:
-				timeout.Stop()
-				c.flush()
-				if ackFlushType == flushAndClean {
-					c.clean()
-				}
-				t.waitFlushCh <- true
-				if ackFlushType == flushAndClose {
-					return
-				}
 			}
 		}
 	}()
+
 	return t
 }
 
@@ -261,38 +261,70 @@ func (t *cachedAcks) clean() {
 }
 
 type timedAckGroupingTracker struct {
-	ackIndividualCh   chan MessageID
-	ackCumulativeCh   chan MessageID
-	duplicateIDCh     chan MessageID
-	duplicateResultCh chan bool
-	flushCh           chan ackFlushType
-	waitFlushCh       chan bool
+	eventsCh chan interface{}
+	isClosed bool
+}
+
+type addCumulativeReq struct {
+	id MessageID
+}
+
+type addIndividualReq struct {
+	id MessageID
+}
+
+type isDuplicateIDReq struct {
+	id     MessageID
+	doneCh chan bool
+}
+
+type flushReq struct {
+	ackFlushType ackFlushType
+	doneCh       chan bool
 }
 
 func (t *timedAckGroupingTracker) add(id MessageID) {
-	t.ackIndividualCh <- id
+	if !t.isClosed {
+		t.eventsCh <- &addIndividualReq{id: id}
+	}
 }
 
 func (t *timedAckGroupingTracker) addCumulative(id MessageID) {
-	t.ackCumulativeCh <- id
+	if !t.isClosed {
+		t.eventsCh <- &addCumulativeReq{id: id}
+	}
 }
 
 func (t *timedAckGroupingTracker) isDuplicate(id MessageID) bool {
-	t.duplicateIDCh <- id
-	return <-t.duplicateResultCh
+	if !t.isClosed {
+		doneCh := make(chan bool)
+		t.eventsCh <- &isDuplicateIDReq{id: id, doneCh: doneCh}
+		return <-doneCh
+	}
+	return false
 }
 
 func (t *timedAckGroupingTracker) flush() {
-	t.flushCh <- flushOnly
-	<-t.waitFlushCh
+	if !t.isClosed {
+		doneCh := make(chan bool)
+		t.eventsCh <- &flushReq{ackFlushType: flushOnly, doneCh: doneCh}
+		<-doneCh
+	}
 }
 
 func (t *timedAckGroupingTracker) flushAndClean() {
-	t.flushCh <- flushAndClean
-	<-t.waitFlushCh
+	if !t.isClosed {
+		doneCh := make(chan bool)
+		t.eventsCh <- &flushReq{ackFlushType: flushAndClean, doneCh: doneCh}
+		<-doneCh
+	}
 }
 
 func (t *timedAckGroupingTracker) close() {
-	t.flushCh <- flushAndClose
-	<-t.waitFlushCh
+	if !t.isClosed {
+		t.isClosed = true
+		doneCh := make(chan bool)
+		t.eventsCh <- &flushReq{ackFlushType: flushAndClose, doneCh: doneCh}
+		<-doneCh
+	}
 }
