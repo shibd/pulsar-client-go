@@ -244,6 +244,7 @@ func (t *timedAckGroupingTracker) isDuplicate(id MessageID) bool {
 	t.mutex.RLock()
 	ackSet, found := t.pendingAcks[messageIDHash(id)]
 	if !found {
+		t.mutex.RUnlock()
 		return false
 	}
 	t.mutex.RUnlock()
