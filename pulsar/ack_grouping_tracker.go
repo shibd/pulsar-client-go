@@ -142,9 +142,9 @@ func (t *timedAckGroupingTracker) addAndCheckIfFull(id MessageID) bool {
 }
 
 func (t *timedAckGroupingTracker) tryUpdateLastCumulativeAck(id MessageID) {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	if messageIDCompare(t.lastCumulativeAck, id) < 0 {
-		t.mutex.Lock()
-		defer t.mutex.Unlock()
 		t.lastCumulativeAck = id
 		t.cumulativeAckRequired = true
 	}
@@ -238,10 +238,11 @@ func (t *timedAckGroupingTracker) addCumulative(id MessageID) {
 }
 
 func (t *timedAckGroupingTracker) isDuplicate(id MessageID) bool {
+	t.mutex.RLock()
 	if messageIDCompare(t.lastCumulativeAck, id) >= 0 {
+		t.mutex.RUnlock()
 		return true
 	}
-	t.mutex.RLock()
 	ackSet, found := t.pendingAcks[messageIDHash(id)]
 	if !found {
 		t.mutex.RUnlock()
