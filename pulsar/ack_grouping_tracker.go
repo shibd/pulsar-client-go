@@ -118,6 +118,8 @@ func (i *immediateAckGroupingTracker) close() {
 }
 
 func (t *timedAckGroupingTracker) addAndCheckIfFull(id MessageID) bool {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	t.singleAcks[t.index] = id
 	t.index++
 	key := messageIDHash(id)
@@ -141,12 +143,16 @@ func (t *timedAckGroupingTracker) addAndCheckIfFull(id MessageID) bool {
 
 func (t *timedAckGroupingTracker) tryUpdateLastCumulativeAck(id MessageID) {
 	if messageIDCompare(t.lastCumulativeAck, id) < 0 {
+		t.mutex.Lock()
+		defer t.mutex.Unlock()
 		t.lastCumulativeAck = id
 		t.cumulativeAckRequired = true
 	}
 }
 
 func (t *timedAckGroupingTracker) flushIndividualAcks() {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	if t.index > 0 {
 		t.ackList(t.singleAcks[0:t.index])
 		for _, id := range t.singleAcks[0:t.index] {
@@ -170,6 +176,8 @@ func (t *timedAckGroupingTracker) flushIndividualAcks() {
 }
 
 func (t *timedAckGroupingTracker) flushCumulativeAck() {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	if t.cumulativeAckRequired {
 		t.ackCumulative(t.lastCumulativeAck)
 		t.cumulativeAckRequired = false
@@ -177,6 +185,8 @@ func (t *timedAckGroupingTracker) flushCumulativeAck() {
 }
 
 func (t *timedAckGroupingTracker) clean() {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	maxSize := len(t.singleAcks)
 	t.singleAcks = make([]MessageID, maxSize)
 	t.index = 0
@@ -212,8 +222,6 @@ type timedAckGroupingTracker struct {
 }
 
 func (t *timedAckGroupingTracker) add(id MessageID) {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
 	if t.addAndCheckIfFull(id) {
 		t.flushIndividualAcks()
 		if t.options.MaxTime > 0 {
@@ -223,8 +231,6 @@ func (t *timedAckGroupingTracker) add(id MessageID) {
 }
 
 func (t *timedAckGroupingTracker) addCumulative(id MessageID) {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
 	t.tryUpdateLastCumulativeAck(id)
 	if t.options.MaxTime <= 0 {
 		t.flushCumulativeAck()
@@ -232,15 +238,15 @@ func (t *timedAckGroupingTracker) addCumulative(id MessageID) {
 }
 
 func (t *timedAckGroupingTracker) isDuplicate(id MessageID) bool {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
 	if messageIDCompare(t.lastCumulativeAck, id) >= 0 {
 		return true
 	}
+	t.mutex.RLock()
 	ackSet, found := t.pendingAcks[messageIDHash(id)]
 	if !found {
 		return false
 	}
+	t.mutex.RUnlock()
 	if ackSet == nil || !messageIDIsBatch(id) {
 		// NOTE: should we panic when ackSet != nil and messageIDIsBatch(id) is true?
 		return true
@@ -250,22 +256,16 @@ func (t *timedAckGroupingTracker) isDuplicate(id MessageID) bool {
 }
 
 func (t *timedAckGroupingTracker) flush() {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
 	t.flushIndividualAcks()
 	t.flushCumulativeAck()
 }
 
 func (t *timedAckGroupingTracker) flushAndClean() {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
 	t.flush()
 	t.clean()
 }
 
 func (t *timedAckGroupingTracker) close() {
-	t.mutex.RLock()
-	defer t.mutex.RUnlock()
 	t.flushAndClean()
 	close(t.donCh)
 }
