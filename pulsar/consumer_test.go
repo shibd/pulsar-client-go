@@ -3623,13 +3623,15 @@ func TestConsumerSeekByTimeOnPartitionedTopic(t *testing.T) {
 	assert.Nil(t, err)
 	defer client.Close()
 
+	topic := newTopicName()
+
 	// Create topic with 5 partitions
-	topicAdminURL := "admin/v2/persistent/public/default/TestSeekByTimeOnPartitionedTopic/partitions"
+	topicAdminURL := "admin/v2/persistent/public/default/" + topic + "/partitions"
 	err = httpPut(topicAdminURL, 5)
 	defer httpDelete(topicAdminURL)
 	assert.Nil(t, err)
 
-	topicName := "persistent://public/default/TestSeekByTimeOnPartitionedTopic"
+	topicName := "persistent://public/default/" + topic
 
 	partitions, err := client.TopicPartitions(topicName)
 	assert.Nil(t, err)
