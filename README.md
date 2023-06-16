@@ -26,7 +26,7 @@
 
 # Apache Pulsar Go Client Library
 
-A Go client library for [Apache Pulsar](https://pulsar.apache.org/). For the supported Pulsar features, see [Client Feature Matrix](https://pulsar.apache.org/client-feature-matrix/).
+A  Go client library for [Apache Pulsar](https://pulsar.apache.org/). For the supported Pulsar features, see [Client Feature Matrix](https://pulsar.apache.org/client-feature-matrix/).
 
 ## Purpose
 
