@@ -664,13 +664,15 @@ func (c *consumer) Seek(msgID MessageID) error {
 		return err
 	}
 
-	if err := c.consumers[msgID.PartitionIdx()].Seek(msgID); err != nil {
-		return err
-	}
-
 	// clear messageCh
+	// We need clear messageCh before execution SeekByTime. Otherwise, messages of after seek maybe will be clear.
+	// Note: Cleaning up messageCh will also drain the queueCh of the sub-consumers
 	for len(c.messageCh) > 0 {
 		<-c.messageCh
+	}
+
+	if err := c.consumers[msgID.PartitionIdx()].Seek(msgID); err != nil {
+		return err
 	}
 
 	return nil
@@ -680,6 +682,14 @@ func (c *consumer) SeekByTime(time time.Time) error {
 	c.Lock()
 	defer c.Unlock()
 	var errs error
+
+	// clear messageCh
+	// We need clear messageCh before execution SeekByTime. Otherwise, messages of after seek maybe will be clear.
+	// Note: Cleaning up messageCh will also drain the queueCh of the sub-consumers
+	for len(c.messageCh) > 0 {
+		<-c.messageCh
+	}
+
 	// run SeekByTime on every partition of topic
 	for _, cons := range c.consumers {
 		if err := cons.SeekByTime(time); err != nil {
@@ -687,12 +697,6 @@ func (c *consumer) SeekByTime(time time.Time) error {
 			errs = pkgerrors.Wrap(newError(SeekFailed, err.Error()), msg)
 		}
 	}
-
-	// clear messageCh
-	for len(c.messageCh) > 0 {
-		<-c.messageCh
-	}
-
 	return errs
 }
 
