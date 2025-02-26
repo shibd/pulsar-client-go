@@ -2307,12 +2307,12 @@ func convertToMessageID(id *pb.MessageIdData) *trackingMessageID {
 		messageID: &messageID{
 			ledgerID:  int64(id.GetLedgerId()),
 			entryID:   int64(id.GetEntryId()),
-			batchIdx:  -1,
+			batchIdx:  id.GetBatchIndex(),
 			batchSize: id.GetBatchSize(),
 		},
 	}
-	if id.GetBatchSize() > 1 {
-		msgID.batchIdx = id.GetBatchIndex()
+	if msgID.batchIdx == -1 {
+		msgID.batchIdx = 0
 	}
 
 	return msgID
