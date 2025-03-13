@@ -1097,6 +1097,9 @@ func (pc *partitionConsumer) internalSeekByTime(seek *seekByTimeRequest) {
 		return
 	}
 	pc.lastDequeuedMsg = nil
+	// 这里应该是要设置为null的, 这样放进来所有的消息?? 否则会根据用户初始设置的startMessageId来过滤，那是不对的.
+	// 或者，根本的解决办法是，这个seek操作要有一个response, 告诉客户端seekByTime之后具体的messageId是多少, 直接设置.
+	pc.startMessageID.set(nil)
 	pc.hasSoughtByTime.Store(true)
 	pc.clearQueueAndGetNextMessage()
 }
@@ -1319,6 +1322,7 @@ func (pc *partitionConsumer) MessageReceived(response *pb.CommandMessage, header
 		trackingMsgID.consumer = pc
 
 		if pc.messageShouldBeDiscarded(trackingMsgID) {
+			pc.log.Infof("Mesage should be discarded: %v startMessageId: %v", trackingMsgID.String(), pc.startMessageID.msgID.String())
 			pc.AckID(trackingMsgID)
 			skippedMessages++
 			continue
@@ -1482,7 +1486,8 @@ func (pc *partitionConsumer) messageShouldBeDiscarded(msgID *trackingMessageID) 
 	}
 
 	if pc.options.startMessageIDInclusive {
-		return pc.startMessageID.get().greater(msgID.messageID)
+		greater := pc.startMessageID.get().greater(msgID.messageID)
+		return greater
 	}
 
 	// Non inclusive
