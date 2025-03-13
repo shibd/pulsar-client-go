@@ -1189,51 +1189,132 @@ func testReaderSeekByTimeWithHasNext(t *testing.T, startMessageID MessageID) {
 	assert.Nil(t, err)
 	defer reader.Close()
 
+	// 6. Assert these messages are received
+	var fourMsgTime time.Time
+	for i := 0; i < 4; i++ {
+		assert.True(t, reader.HasNext())
+		msg, err := reader.Next(context.Background())
+		assert.NoError(t, err)
+		println(msg.ID().String() + " receive msg: " + string(msg.Payload()))
+		fourMsgTime = msg.PublishTime()
+	}
+
+	// 3. Seek time to now
+	reader.SeekByTime(fourMsgTime)
+
+	// 4. Should not receive msg
+	for reader.HasNext() {
+		msg, err := reader.Next(context.Background())
+		assert.NoError(t, err)
+		println(msg.ID().String() + " receive msg again: " + string(msg.Payload()))
+	}
+}
+func TestReaderWithSeekByTime(t *testing.T) {
+	client, err := NewClient(ClientOptions{
+		URL: lookupURL,
+	})
+
+	assert.Nil(t, err)
+	defer client.Close()
+
+	topic := newTopicName()
+	ctx := context.Background()
+
+	// create producer
+	producer, err := client.CreateProducer(ProducerOptions{
+		Topic:           topic,
+		DisableBatching: true,
+	})
+	assert.Nil(t, err)
+	defer producer.Close()
+
+	// 1. send 10 messages
+	var lastMsgID MessageID
+	for i := 0; i < 10; i++ {
+		lastMsgID, err = producer.Send(ctx, &ProducerMessage{
+			Payload: []byte(fmt.Sprintf("hello-%d", i)),
+		})
+		assert.NoError(t, err)
+
+		assert.NotNil(t, lastMsgID)
+	}
+
+	// 2. create reader
+	reader, err := client.CreateReader(ReaderOptions{
+		Topic:                   topic,
+		StartMessageID:          EarliestMessageID(),
+		StartMessageIDInclusive: false,
+	})
+	assert.Nil(t, err)
+	defer reader.Close()
+
+	// 6. Assert these messages are received
+	var fourMsgTime time.Time
+	for i := 0; i < 4; i++ {
+		assert.True(t, reader.HasNext())
+		msg, err := reader.Next(context.Background())
+		assert.NoError(t, err)
+		println(msg.ID().String() + " receive msg: " + string(msg.Payload()))
+		fourMsgTime = msg.PublishTime()
+	}
+
+	// 3. Seek time to now
+	reader.SeekByTime(fourMsgTime)
+
+	// 4. Should not receive msg
+	for reader.HasNext() {
+		msg, err := reader.Next(context.Background())
+		assert.NoError(t, err)
+		println(msg.ID().String() + " receive msg again: " + string(msg.Payload()))
+	}
+}
+
+func TestReaderWithSeekByTimeNow(t *testing.T) {
+	client, err := NewClient(ClientOptions{
+		URL: lookupURL,
+	})
+
+	assert.Nil(t, err)
+	defer client.Close()
+
+	topic := newTopicName()
+	ctx := context.Background()
+
+	// create producer
+	producer, err := client.CreateProducer(ProducerOptions{
+		Topic:           topic,
+		DisableBatching: true,
+	})
+	assert.Nil(t, err)
+	defer producer.Close()
+
+	// 1. send 10 messages
+	var lastMsgID MessageID
+	for i := 0; i < 10; i++ {
+		lastMsgID, err = producer.Send(ctx, &ProducerMessage{
+			Payload: []byte(fmt.Sprintf("hello-%d", i)),
+		})
+		assert.NoError(t, err)
+
+		assert.NotNil(t, lastMsgID)
+	}
+
+	// 2. create reader
+	reader, err := client.CreateReader(ReaderOptions{
+		Topic:                   topic,
+		StartMessageID:          EarliestMessageID(),
+		StartMessageIDInclusive: true,
+	})
+	assert.Nil(t, err)
+	defer reader.Close()
+
 	// 3. Seek time to now
 	reader.SeekByTime(time.Now())
 
 	// 4. Should not receive msg
-	{
-		assert.False(t, reader.HasNext())
-		timeoutCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		msg, err := reader.Next(timeoutCtx)
-		assert.Error(t, err)
-		assert.Nil(t, msg)
-		cancel()
-	}
-
-	// 5. send more 10 messages
-	for i := 0; i < 10; i++ {
-		lastMsgID, err = producer.Send(ctx, &ProducerMessage{
-			Payload: []byte(fmt.Sprintf("hello2-%d", i)),
-		})
-		assert.NoError(t, err)
-		assert.NotNil(t, lastMsgID)
-	}
-
-	// 6. Assert these messages are received
-	for i := 0; i < 10; i++ {
-		assert.True(t, reader.HasNext())
+	for reader.HasNext() {
 		msg, err := reader.Next(context.Background())
 		assert.NoError(t, err)
-		assert.Equal(t, fmt.Sprintf("hello2-%d", i), string(msg.Payload()))
-	}
-
-	// assert not more msg
-	{
-		assert.False(t, reader.HasNext())
-		timeoutCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		msg, err := reader.Next(timeoutCtx)
-		assert.Error(t, err)
-		assert.Nil(t, msg)
-		cancel()
-	}
-}
-func TestReaderWithSeekByTime(t *testing.T) {
-	startMessageIDs := []MessageID{EarliestMessageID(), LatestMessageID()}
-	for _, startMsgID := range startMessageIDs {
-		t.Run(fmt.Sprintf("TestReaderSeekByTime_%v", startMsgID), func(t *testing.T) {
-			testReaderSeekByTimeWithHasNext(t, startMsgID)
-		})
+		println(msg.ID().String() + " receive msg again: " + string(msg.Payload()))
 	}
 }

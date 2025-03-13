@@ -2246,6 +2246,7 @@ func (pc *partitionConsumer) hasNext() bool {
 		pc.startMessageID.set(res.markDeletePosition)
 		// We only care about comparing ledger ids and entry ids as mark delete position
 		// doesn't have other ids such as batch index
+		pc.log.Infof("Test--: lastMessageInBroker: %s, startMessageID: %s", pc.lastMessageInBroker.String(), pc.startMessageID.get().String())
 		compareResult := pc.lastMessageInBroker.messageID.compareLedgerAndEntryID(pc.startMessageID.get().messageID)
 		return compareResult > 0 || (pc.options.startMessageIDInclusive && compareResult == 0)
 	}
